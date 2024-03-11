@@ -121,24 +121,56 @@ public class DirectionalMovement : MonoBehaviour
         {
             return input_types.NONE;
         }
-
+        
+        for (int i = index - 1; i >= 1; i--)
+        {
+            directionals test = calc_directionals(inputs[i]);
+            if (test == minus2_target)
+            {
+                for (int j = i - 1; i >= 0; i--)
+                {
+                    directionals test2 = calc_directionals(inputs[i]);
+                    if (test2 ==  minus4_target)
+                    {
+                        return forward ? input_types.HCIRCLEFOR : input_types.HCIRCLEBACK;
+                    }
+                    else if (test2 != minus3_target && test2 != minus2_target)
+                    {
+                        break;
+                    }
+                }
+            }
+            else if (test != minus1_target && test != curr_type)
+            {
+                break;
+            }
+        }
+        
         if (calc_directionals(inputs[index - 1]) != minus1_target)
         {
             return input_types.NONE;
         }
 
-        for (int j = index - 2; j >= 0; j--)
+        for (int j = index - 1; j >= 0; j--)
         {
+            if (guaranteed_dp)
+            {
+                directionals test = calc_directionals(inputs[j]);
+                if (test == minus2_target)
+                {
+                    return forward ? input_types.DPFOR : input_types.DPBACK;
+                }
+                else if (test != minus1_target && test != curr_type)
+                {
+                    break;
+                }
+            }
+            
             if (calc_directionals(inputs[j]) != minus2_target)
             {
                 continue;
             }
-
-            if (guaranteed_dp)
-            {
-                return forward ? input_types.DPFOR : input_types.DPBACK;
-            }
-
+            
             // a quarter circle has been inputted
             // check if there are any inputs before inputs[j]
             // if so, a half circle or dp may have been inputted
