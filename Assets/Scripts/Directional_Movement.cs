@@ -1,12 +1,11 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Windows;
 
+// add leniency for half circle and solo dp checks
 public class DirectionalMovement : MonoBehaviour
 {
-    private static int buffer_frames = 13;
+    private static int buffer_frames = 25;
 
     private static readonly Vector2 northwest = Vector2.ClampMagnitude(new Vector2(-1, 1), 1);
     private static readonly Vector2 northeast = Vector2.ClampMagnitude(new Vector2(1, 1), 1);
@@ -23,7 +22,7 @@ public class DirectionalMovement : MonoBehaviour
     {
         NORTH, SOUTH, WEST, EAST,
         NORTHWEST, NORTHEAST, SOUTHWEST, SOUTHEAST,
-        UNKNOWN
+        UNKNOWN, NONE
     }
 
     private enum input_types
@@ -32,6 +31,8 @@ public class DirectionalMovement : MonoBehaviour
         QCIRCLEBACK,
         HCIRCLEFOR,
         HCIRCLEBACK,
+        DPFOR,
+        DPBACK,
         NONE
     }
 
@@ -55,73 +56,124 @@ public class DirectionalMovement : MonoBehaviour
 
     private input_types test_input_for_direction(List<Vector2> inputs, int index)
     {
-        /*
-            curr_type is the type of the Vector2 input in inputs currently being checked
-            *_test variables represent the type of input needed for a directional input
-            in relation to inputs[index]
-        */
+        bool forward; // is the input forwards or backwards?
+        bool guaranteed_dp; // is the input guaranteed to be a dp if these conditions are met?
 
-        bool forward;
+        // the requried directions for an given directional input
+        // minus4 is the earliest input, minus1 is the second to last input (compared to curr_type)
+        directionals minus1_target;
+        directionals minus2_target;
+        directionals minus3_target;
+        directionals minus4_target;
 
-        directionals prev_test;
-        directionals after_test;
-        directionals before1_test;
-        directionals before2_test;
+        // alternate options for targets 3 and 4 
+        directionals alt3_inbetween = directionals.NONE;
+        directionals alt4_target = directionals.NONE;
 
-        directionals curr_type = calc_directionals(inputs[index]);
-        if (curr_type == directionals.SOUTHEAST)
+        directionals curr_type = calc_directionals(inputs[index]); // the reference input
+        if (curr_type == directionals.EAST) // could be QCF, HCF, DPF
         {
-            before2_test = directionals.WEST;
-            before1_test = directionals.SOUTHWEST;
-            prev_test = directionals.SOUTH;
-            after_test = directionals.EAST;
+            minus4_target = directionals.WEST;
+            minus3_target = directionals.SOUTHWEST;
+            minus2_target = directionals.SOUTH;
+            minus1_target = directionals.SOUTHEAST;
+
+            alt4_target = directionals.EAST;
+            alt3_inbetween = directionals.SOUTHEAST;
 
             forward = true;
+            guaranteed_dp = false;
         }
-        else if (curr_type == directionals.SOUTHWEST)
+        else if (curr_type == directionals.WEST) // could be QCB, HCB, DPB
         {
-            before2_test = directionals.EAST;
-            before1_test = directionals.SOUTHEAST;
-            prev_test = directionals.SOUTH;
-            after_test = directionals.WEST;
+            minus4_target = directionals.EAST;
+            minus3_target = directionals.SOUTHEAST;
+            minus2_target = directionals.SOUTH;
+            minus1_target = directionals.SOUTHWEST;
+
+            alt4_target = directionals.WEST;
+            alt3_inbetween = directionals.SOUTHWEST;
 
             forward = false;
+            guaranteed_dp = false;
         }
-        else
+        else if (curr_type == directionals.SOUTHEAST) // could be DPF
+        {
+            minus4_target = directionals.NONE;
+            minus3_target = directionals.NONE;
+            minus2_target = directionals.EAST;
+            minus1_target = directionals.SOUTH;
+
+            forward = true;
+            guaranteed_dp = true;
+        }
+        else if (curr_type == directionals.SOUTHWEST) // could be DPB
+        {
+            minus4_target = directionals.NONE;
+            minus3_target = directionals.NONE;
+            minus2_target = directionals.WEST;
+            minus1_target = directionals.SOUTH;
+
+            forward = false;
+            guaranteed_dp = true;
+        }
+        else // can't be a directional input
         {
             return input_types.NONE;
         }
 
-        if (calc_directionals(inputs[index + 1]) != after_test)
+        if (calc_directionals(inputs[index - 1]) != minus1_target)
         {
             return input_types.NONE;
         }
 
-        for (int j = index - 1; j >= 0; j--)
+        for (int j = index - 2; j >= 0; j--)
         {
-            if (calc_directionals(inputs[j]) != prev_test)
+            if (calc_directionals(inputs[j]) != minus2_target)
             {
                 continue;
             }
 
+            if (guaranteed_dp)
+            {
+                return forward ? input_types.DPFOR : input_types.DPBACK;
+            }
+
             // a quarter circle has been inputted
-            // check if there are 2 or more inputs before inputs[j]
-            // if so, a half circle may have been input
+            // check if there are any inputs before inputs[j]
+            // if so, a half circle or dp may have been inputted
             if (j >= 2)
             {
                 for (int k = j - 1; k >= 1; k--)
                 {
-                    if (calc_directionals(inputs[k]) != before1_test)
+                    if (calc_directionals(inputs[k]) != minus3_target)
                     {
                         continue;
                     }
 
                     for (int l = k - 1; l >= 0; l--)
                     {
-                        if (calc_directionals(inputs[l]) == before2_test)
+                        if (calc_directionals(inputs[l]) == minus4_target)
                         {
                             return forward ? input_types.HCIRCLEFOR : input_types.HCIRCLEBACK;
                         }
+                    }
+                }
+            }
+
+            if (j >= 1)
+            {
+                for (int k = j - 1; k >= 0; k--)
+                {
+                    directionals test = calc_directionals(inputs[k]);
+
+                    if (test == alt4_target)
+                    {
+                        return forward ? input_types.DPFOR : input_types.DPBACK;
+                    }
+                    else if (test != minus2_target && test != alt3_inbetween)
+                    {
+                        break;
                     }
                 }
             }
@@ -134,7 +186,7 @@ public class DirectionalMovement : MonoBehaviour
 
     private input_types check_inputs(List<Vector2> inputs)
     {
-        for (int i = inputs.Count - 2; i >= 1; i--)
+        for (int i = inputs.Count - 1; i >= 1; i--)
         {
             input_types input = test_input_for_direction(inputs, i);
             if (input != input_types.NONE)
