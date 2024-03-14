@@ -1,16 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using UnityEngine;
 
 public class DirectionalMovement : MonoBehaviour
 {
     private static readonly int buffer_frames = 25;
-
-    private static readonly Vector2 northwest = Vector2.ClampMagnitude(new Vector2(-1, 1), 1);
-    private static readonly Vector2 northeast = Vector2.ClampMagnitude(new Vector2(1, 1), 1);
-    private static readonly Vector2 southwest = Vector2.ClampMagnitude(new Vector2(-1, -1), 1);
-    private static readonly Vector2 southeast = Vector2.ClampMagnitude(new Vector2(1, -1), 1);
 
     [SerializeField] private InputReader input_reader;
 
@@ -40,30 +34,46 @@ public class DirectionalMovement : MonoBehaviour
     // i.e case Vector2 v when v.x < 0.2 && v.y > 0: return Directionals.NORTH;
     private Directionals calc_directionals(Vector2 direction)
     {
-        switch (direction)
+        if (direction == Vector2.zero)
         {
-            case Vector2 v when v == Vector2.up:
-                return Directionals.NORTH;
-                
-            case Vector2 v when v == Vector2.down:
-                return Directionals.SOUTH;
-                
-            case Vector2 v when v == Vector2.left:
-                return Directionals.WEST;
+            return Directionals.NONE;
+        }
 
-            case Vector2 v when v == Vector2.right:
+        double angle = VectorFunctions.get_vector_angle(direction);
+        while (angle > 360)
+        {
+            angle -= 360;
+        }
+
+        while (angle < 0)
+        {
+            angle += 360;
+        }
+
+        switch (angle)
+        {
+            case > 337.5 or <= 22.5:
                 return Directionals.EAST;
 
-            case Vector2 v when v == northwest:
-                return Directionals.NORTHWEST;
-
-            case Vector2 v when v == northeast:
+            case > 22.5 and <= 67.5:
                 return Directionals.NORTHEAST;
 
-            case Vector2 v when v == southwest:
-                return Directionals.SOUTHWEST;
+            case > 67.5 and <= 112.5:
+                return Directionals.NORTH;
 
-            case Vector2 v when v == southeast:
+            case > 112.5 and <= 157.5:
+                return Directionals.NORTHWEST;
+
+            case > 157.5 and <= 202.5:
+                return Directionals.WEST;
+
+            case > 202.5 and <= 247.5:
+                return Directionals.SOUTHWEST;
+                
+            case > 247.5 and <= 292.5:
+                return Directionals.SOUTH;
+                
+            case > 292.5 and <= 337.5:
                 return Directionals.SOUTHEAST;
 
             default:
@@ -386,17 +396,6 @@ public class DirectionalMovement : MonoBehaviour
         }
 
         return InputTypes.NONE;
-    }
-
-    private void debug_vector2_list(List<Vector2> list)
-    {
-        string test = "";
-        foreach (Vector2 vector in list)
-        {
-            test += vector.ToString() + " ";
-        }
-
-        print(test);
     }
 
     // Start is called before the first frame update
