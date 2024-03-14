@@ -8,6 +8,7 @@ public class VectorFunctions
     {
         return new Vector2((float)Math.Cos(degrees * Mathf.Deg2Rad), (float)Math.Sin(degrees * Mathf.Deg2Rad));
     }
+    
     public static double get_vector_angle(Vector2 vector)
     {
         return Math.Atan2(vector.y, vector.x) * Mathf.Rad2Deg;
