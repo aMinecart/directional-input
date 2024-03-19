@@ -124,14 +124,14 @@ public class DirectionalMovement : MonoBehaviour
 
         var (minus1_target, minus2_target, minus3_target, minus4_target) = is_forward_input ? get_targets(InputTypes.HCIRCLEFOR) : get_targets(InputTypes.HCIRCLEBACK);
 
-        Directionals direction1 = calc_directionals(inputs[index - 1]);
+        Directionals minus1_direction = calc_directionals(inputs[index - 1]);
         int next_input_index = index - 2;
 
         // any intermediate check for a half circle can be skipped
         // however, only one can be skipped for the input to still be valid
         
         // this check can be skipped
-        if (direction1 == minus1_target)
+        if (minus1_direction == minus1_target)
         {
             // skip to the input two inputs before inputs[index]
             while (next_input_index >= 3 && calc_directionals(inputs[next_input_index]) == minus1_target)
@@ -156,15 +156,19 @@ public class DirectionalMovement : MonoBehaviour
                 // this check can be skipped
                 if (calc_directionals(inputs[next_input_index]) == minus3_target)
                 {
-                    while (next_input_index >= 1 && calc_directionals(inputs[next_input_index]) == minus3_target)
+                    do
                     {
                         next_input_index--;
-                    }
+                    } while (next_input_index >= 1 && calc_directionals(inputs[next_input_index]) == minus3_target);
                 }
 
                 // if the input four (or three, if the previous check was skipped)
                 // inputs before inputs[index] meets the target,
                 // input is a half circle
+
+                // if all checks passed but there is no input before minus3_target,
+                // next_input_index may be less than 0
+                // check that next_input_index is greater than 0 to prevent an out of bounds error
 
                 // whether the previous check was skipped or not, the final input must be equal to minus4_target
                 if (next_input_index >= 0 && calc_directionals(inputs[next_input_index]) == minus4_target)
@@ -190,7 +194,7 @@ public class DirectionalMovement : MonoBehaviour
                 }
             }
         }
-        else if (direction1 == minus2_target)
+        else if (minus1_direction == minus2_target)
         {
             // minus1_target was skipped, so perform a strict check on remaining inputs
 
