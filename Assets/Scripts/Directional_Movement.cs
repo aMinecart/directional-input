@@ -403,7 +403,7 @@ public class DirectionalMovement : MonoBehaviour
 
         if (minus1_direction == minus1_target)
         {
-            while (calc_directionals(inputs[start_index]) == minus1_target)
+            while (index >= 1 && calc_directionals(inputs[start_index]) == minus1_target)
             {
                 start_index--;
             }
@@ -414,10 +414,10 @@ public class DirectionalMovement : MonoBehaviour
                 do
                 {
                     start_index--;
-                } while (calc_directionals(inputs[start_index]) == minus2_target);
+                } while (index >= 1 && calc_directionals(inputs[start_index]) == minus2_target);
             }
 
-            if (calc_directionals(inputs[start_index]) == start_target)
+            if (index >= 0 && calc_directionals(inputs[start_index]) == start_target)
             {
                 return is_forward_input;
             }
@@ -479,7 +479,7 @@ public class DirectionalMovement : MonoBehaviour
 
         if (minus1_direction == minus1_target)
         {
-            while (calc_directionals(inputs[start_index]) == minus1_target)
+            while (index >= 1 && calc_directionals(inputs[start_index]) == minus1_target)
             {
                 start_index--;
             }
@@ -490,10 +490,10 @@ public class DirectionalMovement : MonoBehaviour
                 do
                 {
                     start_index--;
-                } while (calc_directionals(inputs[start_index]) == minus2_target);
+                } while (index >= 1 && calc_directionals(inputs[start_index]) == minus2_target);
             }
 
-            if (calc_directionals(inputs[start_index]) == start_target)
+            if (index >= 0 && calc_directionals(inputs[start_index]) == start_target)
             {
                 return is_forward_input;
             }
@@ -543,7 +543,7 @@ public class DirectionalMovement : MonoBehaviour
 
         if (minus1_direction == middle_target)
         {
-            while (calc_directionals(inputs[start_index]) == middle_target)
+            while (index >= 1 && calc_directionals(inputs[start_index]) == middle_target)
             {
                 start_index--;
             }
@@ -598,7 +598,7 @@ public class DirectionalMovement : MonoBehaviour
 
         if (minus1_direction == middle_target)
         {
-            while (calc_directionals(inputs[start_index]) == middle_target)
+            while (index >= 1 && calc_directionals(inputs[start_index]) == middle_target)
             {
                 start_index--;
             }
