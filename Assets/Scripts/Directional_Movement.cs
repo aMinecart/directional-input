@@ -4,13 +4,15 @@ using UnityEngine;
 
 public class DirectionalMovement : MonoBehaviour
 {
-    private static readonly int buffer_frames = 25;
+    private static readonly int buffer_frames = 13;
+    private static readonly int max_input_length = 25; // idea for default is 10
 
     [SerializeField] private InputReader input_reader;
 
     private Vector2 move_direction;
-    private List<Vector2> user_inputs = new List<Vector2>(buffer_frames + 1);
+    private List<Vector2> user_inputs = new List<Vector2>();
     private InputTypes inputted_directional;
+    private List<Directionals> test_list = new List<Directionals>();
 
     private enum Directionals
     {
@@ -124,7 +126,7 @@ public class DirectionalMovement : MonoBehaviour
         if (minus1_direction == minus1_target)
         {
             // skip to the input two inputs before inputs[index]
-            while (start_index >= 3 && calc_directionals(inputs[start_index]) == minus1_target)
+            while (start_index >= 2 && calc_directionals(inputs[start_index]) == minus1_target)
             {
                 start_index--;
             }
@@ -138,30 +140,23 @@ public class DirectionalMovement : MonoBehaviour
                 do
                 {
                     start_index--;
-                } while (start_index >= 2 && calc_directionals(inputs[start_index]) == minus2_target);
+                } while (start_index >= 1 && calc_directionals(inputs[start_index]) == minus2_target);
 
                 // if the input three inputs before inputs[index] meets the target,
                 // skip to the input four inputs before inputs[index]
 
                 // this check can be skipped
-                if (calc_directionals(inputs[start_index]) == minus3_target)
+                while (start_index >= 1 && calc_directionals(inputs[start_index]) == minus3_target)
                 {
-                    do
-                    {
-                        start_index--;
-                    } while (start_index >= 1 && calc_directionals(inputs[start_index]) == minus3_target);
+                    start_index--;
                 }
 
                 // if the input four (or three, if the previous check was skipped)
                 // inputs before inputs[index] meets the target,
                 // input is a half circle
 
-                // if all checks passed but there is no input before minus3_target,
-                // start_index may be less than 0
-                // check that start_index is greater than 0 to prevent an out of bounds error
-
                 // whether the previous check was skipped or not, the final input must be equal to start_target
-                if (start_index >= 0 && calc_directionals(inputs[start_index]) == start_target)
+                if (calc_directionals(inputs[start_index]) == start_target && index - start_index < max_input_length)
                 {
                     return is_forward_input;
                 }
@@ -178,7 +173,7 @@ public class DirectionalMovement : MonoBehaviour
 
                 // if the input three inputs before inputs[index] meets the target,
                 // input is a half circle
-                if (calc_directionals(inputs[start_index]) == start_target)
+                if (calc_directionals(inputs[start_index]) == start_target && index - start_index < max_input_length)
                 {
                     return is_forward_input;
                 }
@@ -205,7 +200,7 @@ public class DirectionalMovement : MonoBehaviour
 
                 // if the input three inputs before inputs[index] meets the target,
                 // input is a half circle
-                if (calc_directionals(inputs[start_index]) == start_target)
+                if (calc_directionals(inputs[start_index]) == start_target && index - start_index < max_input_length)
                 {
                     return is_forward_input;
                 }
@@ -255,12 +250,12 @@ public class DirectionalMovement : MonoBehaviour
 
         // any intermediate check for a half circle can be skipped
         // however, only one can be skipped for the input to still be valid
-        
+
         // this check can be skipped
         if (minus1_direction == minus1_target)
         {
             // skip to the input two inputs before inputs[index]
-            while (start_index >= 3 && calc_directionals(inputs[start_index]) == minus1_target)
+            while (start_index >= 2 && calc_directionals(inputs[start_index]) == minus1_target)
             {
                 start_index--;
             }
@@ -274,30 +269,23 @@ public class DirectionalMovement : MonoBehaviour
                 do
                 {
                     start_index--;
-                } while (start_index >= 2 && calc_directionals(inputs[start_index]) == minus2_target);
+                } while (start_index >= 1 && calc_directionals(inputs[start_index]) == minus2_target);
 
                 // if the input three inputs before inputs[index] meets the target,
                 // skip to the input four inputs before inputs[index]
 
                 // this check can be skipped
-                if (calc_directionals(inputs[start_index]) == minus3_target)
+                while (start_index >= 1 && calc_directionals(inputs[start_index]) == minus3_target)
                 {
-                    do
-                    {
-                        start_index--;
-                    } while (start_index >= 1 && calc_directionals(inputs[start_index]) == minus3_target);
+                    start_index--;
                 }
 
                 // if the input four (or three, if the previous check was skipped)
                 // inputs before inputs[index] meets the target,
                 // input is a half circle
 
-                // if all checks passed but there is no input before minus3_target,
-                // start_index may be less than 0
-                // check that start_index is greater than 0 to prevent an out of bounds error
-
                 // whether the previous check was skipped or not, the final input must be equal to start_target
-                if (start_index >= 0 && calc_directionals(inputs[start_index]) == start_target)
+                if (calc_directionals(inputs[start_index]) == start_target && index - start_index < max_input_length)
                 {
                     return is_forward_input;
                 }
@@ -311,10 +299,10 @@ public class DirectionalMovement : MonoBehaviour
                 {
                     start_index--;
                 } while (start_index >= 1 && calc_directionals(inputs[start_index]) == minus3_target);
-                
+
                 // if the input three inputs before inputs[index] meets the target,
                 // input is a half circle
-                if (calc_directionals(inputs[start_index]) == start_target)
+                if (calc_directionals(inputs[start_index]) == start_target && index - start_index < max_input_length)
                 {
                     return is_forward_input;
                 }
@@ -341,7 +329,7 @@ public class DirectionalMovement : MonoBehaviour
 
                 // if the input three inputs before inputs[index] meets the target,
                 // input is a half circle
-                if (calc_directionals(inputs[start_index]) == start_target)
+                if (calc_directionals(inputs[start_index]) == start_target && index - start_index < max_input_length)
                 {
                     return is_forward_input;
                 }
@@ -358,17 +346,30 @@ public class DirectionalMovement : MonoBehaviour
     {
         // if the first input is east or west, could still be a valid dp
         // skip backwards over inputs until a new input is found
+        
+        // int start_index = index;
+
         Directionals end_direction = calc_directionals(inputs[index]);
+        
+        /*
         if (end_direction == Directionals.EAST || end_direction == Directionals.WEST)
         {
-            do
+            // skip backwards to the next unique direction
+            // if index goes below its minimum requirement (2),
+            // break out of the loop
+            while (start_index >= 2 && calc_directionals(inputs[start_index]) == end_direction)
             {
-                index--;
-            } while (index >= 0 && calc_directionals(inputs[index]) == end_direction);
+                start_index--;
+            }
 
-            // update end_direction to the new index
-            end_direction = calc_directionals(inputs[index]);
+            // update end_direction to the new index and skip all concurrent identical directions
+            end_direction = calc_directionals(inputs[start_index]);
+            while (start_index >= 2 && calc_directionals(inputs[start_index - 1]) == end_direction)
+            {
+                start_index--;
+            }
         }
+        */
         
         // dp requries a minimum of 3 inputs
         // if less than two values are before index, cannot be a dp
@@ -382,6 +383,7 @@ public class DirectionalMovement : MonoBehaviour
         // otherwise, cannot be a dp
 
         bool is_forward_input;
+
         if (end_direction == Directionals.SOUTHEAST)
         {
             is_forward_input = true;
@@ -403,21 +405,18 @@ public class DirectionalMovement : MonoBehaviour
 
         if (minus1_direction == minus1_target)
         {
-            while (index >= 1 && calc_directionals(inputs[start_index]) == minus1_target)
+            while (start_index >= 1 && calc_directionals(inputs[start_index]) == minus1_target)
             {
                 start_index--;
             }
 
             // optional inbetween
-            if (calc_directionals(inputs[start_index]) == minus2_target)
+            while (start_index >= 1 && calc_directionals(inputs[start_index]) == minus2_target)
             {
-                do
-                {
-                    start_index--;
-                } while (index >= 1 && calc_directionals(inputs[start_index]) == minus2_target);
+                start_index--;
             }
 
-            if (index >= 0 && calc_directionals(inputs[start_index]) == start_target)
+            if (calc_directionals(inputs[start_index]) == start_target && index - start_index < max_input_length)
             {
                 return is_forward_input;
             }
@@ -432,21 +431,25 @@ public class DirectionalMovement : MonoBehaviour
     {
         // if the first input is east or west, could still be a valid dp
         // skip backwards over inputs until a new input is found
-        Directionals end_direction = calc_directionals(inputs[index]);
+        int new_index = index;
+        Directionals end_direction = calc_directionals(inputs[new_index]);
+
         if (end_direction == Directionals.EAST || end_direction == Directionals.WEST)
         {
-            do
+            // if index goes below its minimum requirement (2),
+            // break out of the loop
+            while (new_index >= 2 && calc_directionals(inputs[new_index]) == end_direction)
             {
-                index--;
-            } while (index >= 0 && calc_directionals(inputs[index]) == end_direction);
+                new_index--;
+            }
 
             // update end_direction to the new index
-            end_direction = calc_directionals(inputs[index]);
+            end_direction = calc_directionals(inputs[new_index]);
         }
 
         // dp requries a minimum of 3 inputs
         // if less than two values are before index, cannot be a dp
-        if (index < 2)
+        if (new_index < 2)
         {
             start_index = -1;
             return null;
@@ -457,6 +460,7 @@ public class DirectionalMovement : MonoBehaviour
         // otherwise, cannot be a dp
 
         bool is_forward_input;
+
         if (end_direction == Directionals.SOUTHEAST)
         {
             is_forward_input = true;
@@ -474,26 +478,23 @@ public class DirectionalMovement : MonoBehaviour
 
         var (minus1_target, minus2_target, start_target, _) = get_targets(is_forward_input ? InputTypes.DPFOR : InputTypes.DPBACK);
 
-        Directionals minus1_direction = calc_directionals(inputs[index - 1]);
-        start_index = index - 2;
+        Directionals minus1_direction = calc_directionals(inputs[new_index - 1]);
+        start_index = new_index - 2;
 
         if (minus1_direction == minus1_target)
         {
-            while (index >= 1 && calc_directionals(inputs[start_index]) == minus1_target)
+            while (start_index >= 1 && calc_directionals(inputs[start_index]) == minus1_target)
             {
                 start_index--;
             }
 
             // optional inbetween
-            if (calc_directionals(inputs[start_index]) == minus2_target)
+            while (start_index >= 1 && calc_directionals(inputs[start_index]) == minus2_target)
             {
-                do
-                {
-                    start_index--;
-                } while (index >= 1 && calc_directionals(inputs[start_index]) == minus2_target);
+                start_index--;
             }
 
-            if (index >= 0 && calc_directionals(inputs[start_index]) == start_target)
+            if (calc_directionals(inputs[start_index]) == start_target && index - start_index < max_input_length)
             {
                 return is_forward_input;
             }
@@ -536,19 +537,19 @@ public class DirectionalMovement : MonoBehaviour
             return null;
         }
 
-        var (middle_target, start_target, _, _) = get_targets(is_forward_input ? InputTypes.QCIRCLEBACK : InputTypes.QCIRCLEBACK);
+        var (middle_target, start_target, _, _) = get_targets(is_forward_input ? InputTypes.QCIRCLEFOR : InputTypes.QCIRCLEBACK);
 
         Directionals minus1_direction = calc_directionals(inputs[index - 1]);
         int start_index = index - 2;
 
         if (minus1_direction == middle_target)
         {
-            while (index >= 1 && calc_directionals(inputs[start_index]) == middle_target)
+            while (start_index >= 1 && calc_directionals(inputs[start_index]) == middle_target)
             {
                 start_index--;
             }
 
-            if (calc_directionals(inputs[start_index]) == start_target)
+            if (calc_directionals(inputs[start_index]) == start_target && index - start_index < max_input_length)
             {
                 return is_forward_input;
             }
@@ -591,19 +592,19 @@ public class DirectionalMovement : MonoBehaviour
             return null;
         }
 
-        var (middle_target, start_target, _, _) = get_targets(is_forward_input ? InputTypes.QCIRCLEBACK : InputTypes.QCIRCLEBACK);
+        var (middle_target, start_target, _, _) = get_targets(is_forward_input ? InputTypes.QCIRCLEFOR : InputTypes.QCIRCLEBACK);
 
         Directionals minus1_direction = calc_directionals(inputs[index - 1]);
         start_index = index - 2;
 
         if (minus1_direction == middle_target)
         {
-            while (index >= 1 && calc_directionals(inputs[start_index]) == middle_target)
+            while (start_index >= 1 && calc_directionals(inputs[start_index]) == middle_target)
             {
                 start_index--;
             }
 
-            if (calc_directionals(inputs[start_index]) == start_target)
+            if (calc_directionals(inputs[start_index]) == start_target && index - start_index < max_input_length)
             {
                 return is_forward_input;
             }
@@ -641,7 +642,9 @@ public class DirectionalMovement : MonoBehaviour
     // adjust for loop condition back to i >= 2 if necessary/when finished testing
     private InputTypes check_inputs(List<Vector2> inputs)
     {
-        for (int i = inputs.Count - 1; i >= 0; i--)
+        int min_index = Math.Max(inputs.Count - buffer_frames, 0);
+
+        for (int i = inputs.Count - 1; i >= min_index; i--)
         {
             InputTypes input = directional_input_test(inputs, i);
             if (input != InputTypes.NONE)
@@ -653,22 +656,32 @@ public class DirectionalMovement : MonoBehaviour
         return InputTypes.NONE;
     }
 
-    // test function for indivual input type test functions
-    /*
-    private bool? find_hcircle_test(List<Vector2> inputs)
+    /* function for testing the results of check_inputs */
+    private void test_check_inputs()
     {
-        for (int i = inputs.Count - 1; i >= 0; i--)
+        List<Vector2> test_inputs = new List<Vector2>()
         {
-            var input = find_half_circle(inputs, i);
-            if (input.HasValue)
-            {
-                return input.Value;
-            }
-        }
+            VectorFunctions.make_vector(0),
+            VectorFunctions.make_vector(0),
+            VectorFunctions.make_vector(0),
+            VectorFunctions.make_vector(0),
+            VectorFunctions.make_vector(0),
+            VectorFunctions.make_vector(315),
+            VectorFunctions.make_vector(315),
+            VectorFunctions.make_vector(315),
+            VectorFunctions.make_vector(270),
+            VectorFunctions.make_vector(270),
+            VectorFunctions.make_vector(270),
+            VectorFunctions.make_vector(270),
+            VectorFunctions.make_vector(315),
+            VectorFunctions.make_vector(315),
+            VectorFunctions.make_vector(0),
+            VectorFunctions.make_vector(0),
+            VectorFunctions.make_vector(0)
+        };
 
-        return null;
+        print(check_inputs(test_inputs));
     }
-    */
 
     // Start is called before the first frame update
     void Start()
@@ -684,25 +697,37 @@ public class DirectionalMovement : MonoBehaviour
     // Update is called once per frame
     void FixedUpdate()
     {
-        user_inputs.Add(move_direction);
-        if (user_inputs.Count > buffer_frames)
-        {
-            user_inputs.RemoveAt(0);
-        }
-        
-        user_inputs = new List<Vector2>()
-        {
-            VectorFunctions.make_vector(180),
-            VectorFunctions.make_vector(225),
-            VectorFunctions.make_vector(270),
-            VectorFunctions.make_vector(315),
-            VectorFunctions.make_vector(0)
-        };
+        //test_check_inputs();
 
-        // debug_vector2_list(user_inputs);
-        // print(find_hcircle_test(user_inputs));
+        user_inputs.Add(move_direction);
+        // VectorFunctions.debug_vector2_list(user_inputs);
+
+        /*
+        Directionals test = calc_directionals(move_direction);
+        if (test != Directionals.NONE)
+        {
+            test_list.Add(test);
+        }
+        */
 
         inputted_directional = check_inputs(user_inputs);
         print(inputted_directional);
+
+        /*
+        if (inputted_directional != InputTypes.NONE)
+        {
+            print(inputted_directional);
+
+            string test_string = "";
+            foreach (var item in test_list)
+            {
+                test_string += item.ToString() + " ";
+            }
+
+            print(test_string);
+
+            test_list.Clear();
+        }
+        */
     }
 }
