@@ -4,13 +4,15 @@ using UnityEngine;
 
 public class DirectionalMovement : MonoBehaviour
 {
-    private static readonly int buffer_frames = 25;
+    private static readonly int buffer_frames = 13;
+    private static readonly int max_input_length = 25; // idea for default is 10
 
     [SerializeField] private InputReader input_reader;
 
     private Vector2 move_direction;
-    private List<Vector2> user_inputs = new List<Vector2>(buffer_frames + 1);
+    private List<Vector2> user_inputs = new List<Vector2>();
     private InputTypes inputted_directional;
+    private List<Directionals> test_list = new List<Directionals>();
 
     private enum Directionals
     {
@@ -30,8 +32,6 @@ public class DirectionalMovement : MonoBehaviour
         NONE
     }
 
-    // update to use range checks instead of equalities for stick compatibility
-    // i.e case Vector2 v when v.x < 0.2 && v.y > 0: return Directionals.NORTH;
     private Directionals calc_directionals(Vector2 direction)
     {
         if (direction == Vector2.zero)
@@ -39,41 +39,31 @@ public class DirectionalMovement : MonoBehaviour
             return Directionals.NONE;
         }
 
-        double angle = VectorFunctions.get_vector_angle(direction);
-        while (angle > 360)
-        {
-            angle -= 360;
-        }
-
-        while (angle < 0)
-        {
-            angle += 360;
-        }
-
+        float angle = VectorFunctions.get_vector_angle(direction);
         switch (angle)
         {
-            case > 337.5 or <= 22.5:
+            case > 337.5f or <= 22.5f:
                 return Directionals.EAST;
 
-            case > 22.5 and <= 67.5:
+            case > 22.5f and <= 67.5f:
                 return Directionals.NORTHEAST;
 
-            case > 67.5 and <= 112.5:
+            case > 67.5f and <= 112.5f:
                 return Directionals.NORTH;
 
-            case > 112.5 and <= 157.5:
+            case > 112.5f and <= 157.5f:
                 return Directionals.NORTHWEST;
 
-            case > 157.5 and <= 202.5:
+            case > 157.5f and <= 202.5f:
                 return Directionals.WEST;
 
-            case > 202.5 and <= 247.5:
+            case > 202.5f and <= 247.5f:
                 return Directionals.SOUTHWEST;
                 
-            case > 247.5 and <= 292.5:
+            case > 247.5f and <= 292.5f:
                 return Directionals.SOUTH;
                 
-            case > 292.5 and <= 337.5:
+            case > 292.5f and <= 337.5f:
                 return Directionals.SOUTHEAST;
 
             default:
@@ -81,314 +71,582 @@ public class DirectionalMovement : MonoBehaviour
         }
     }
 
-    // reminder: clean up the di_test functions' variable initialization
+    private (Directionals, Directionals, Directionals, Directionals) get_targets(InputTypes type)
+    {
+        return type switch
+        {
+            InputTypes.HCIRCLEFOR => (Directionals.SOUTHEAST, Directionals.SOUTH, Directionals.SOUTHWEST, Directionals.WEST),
+            InputTypes.HCIRCLEBACK => (Directionals.SOUTHWEST, Directionals.SOUTH, Directionals.SOUTHEAST, Directionals.EAST),
+            InputTypes.DPFOR => (Directionals.SOUTH, Directionals.SOUTHEAST, Directionals.EAST, Directionals.NULL),
+            InputTypes.DPBACK => (Directionals.SOUTH, Directionals.SOUTHWEST, Directionals.WEST, Directionals.NULL),
+            InputTypes.QCIRCLEFOR => (Directionals.SOUTHEAST, Directionals.SOUTH, Directionals.NULL, Directionals.NULL),
+            InputTypes.QCIRCLEBACK => (Directionals.SOUTHWEST, Directionals.SOUTH, Directionals.NULL, Directionals.NULL),
+            _ => (Directionals.NULL, Directionals.NULL, Directionals.NULL, Directionals.NULL),
+        };
+    }
+
+    private bool? find_half_circle(List<Vector2> inputs, int index)
+    {
+        // half circle requries a minimum of 4 inputs
+        // if less than three values are before index, cannot be a half
+        if (index < 3)
+        {
+            return null;
+        }
+
+        // inputs[index] (last input) must be WEST or EAST
+        // the first input must be the opposite
+        // otherwise, cannot be a half circle
+
+        bool is_forward_input;
+        Directionals end_direction = calc_directionals(inputs[index]);
+
+        if (end_direction == Directionals.EAST)
+        {
+            is_forward_input = true;
+        }
+        else if (end_direction == Directionals.WEST)
+        {
+            is_forward_input = false;
+        }
+        else
+        {
+            return null;
+        }
+
+        var (minus1_target, minus2_target, minus3_target, start_target) = get_targets(is_forward_input ? InputTypes.HCIRCLEFOR : InputTypes.HCIRCLEBACK);
+
+        Directionals minus1_direction = calc_directionals(inputs[index - 1]);
+        int start_index = index - 2;
+
+        // any intermediate check for a half circle can be skipped
+        // however, only one can be skipped for the input to still be valid
+
+        // this check can be skipped
+        if (minus1_direction == minus1_target)
+        {
+            // skip to the input two inputs before inputs[index]
+            while (start_index >= 2 && calc_directionals(inputs[start_index]) == minus1_target)
+            {
+                start_index--;
+            }
+
+            // if the input two inputs before inputs[index] meets the target,
+            // skip to the input three inputs before inputs[index]
+
+            // this check can be skipped
+            if (calc_directionals(inputs[start_index]) == minus2_target)
+            {
+                do
+                {
+                    start_index--;
+                } while (start_index >= 1 && calc_directionals(inputs[start_index]) == minus2_target);
+
+                // if the input three inputs before inputs[index] meets the target,
+                // skip to the input four inputs before inputs[index]
+
+                // this check can be skipped
+                while (start_index >= 1 && calc_directionals(inputs[start_index]) == minus3_target)
+                {
+                    start_index--;
+                }
+
+                // if the input four (or three, if the previous check was skipped)
+                // inputs before inputs[index] meets the target,
+                // input is a half circle
+
+                // whether the previous check was skipped or not, the final input must be equal to start_target
+                if (calc_directionals(inputs[start_index]) == start_target && index - start_index < max_input_length)
+                {
+                    return is_forward_input;
+                }
+            }
+            else if (calc_directionals(inputs[start_index]) == minus3_target)
+            {
+                // minus2_target was skipped, so perform a strict check on remaining inputs
+
+                // skip to the input three inputs before inputs[index]
+                do
+                {
+                    start_index--;
+                } while (start_index >= 1 && calc_directionals(inputs[start_index]) == minus3_target);
+
+                // if the input three inputs before inputs[index] meets the target,
+                // input is a half circle
+                if (calc_directionals(inputs[start_index]) == start_target && index - start_index < max_input_length)
+                {
+                    return is_forward_input;
+                }
+            }
+        }
+        else if (minus1_direction == minus2_target)
+        {
+            // minus1_target was skipped, so perform a strict check on remaining inputs
+
+            // skip to the input two inputs before inputs[index]
+            while (start_index >= 2 && calc_directionals(inputs[start_index]) == minus2_target)
+            {
+                start_index--;
+            }
+
+            // if the input two inputs before inputs[index] meets the target,
+            // skip to the input three inputs before inputs[index]
+            if (calc_directionals(inputs[start_index]) == minus3_target)
+            {
+                do
+                {
+                    start_index--;
+                } while (start_index >= 1 && calc_directionals(inputs[start_index]) == minus3_target);
+
+                // if the input three inputs before inputs[index] meets the target,
+                // input is a half circle
+                if (calc_directionals(inputs[start_index]) == start_target && index - start_index < max_input_length)
+                {
+                    return is_forward_input;
+                }
+            }
+        }
+
+        // end of function reached
+        // no valid half circle input starting at index found in inputs
+        return null;
+    }
+
+    private bool? find_half_circle(List<Vector2> inputs, int index, out int start_index)
+    {
+        // half circle requries a minimum of 4 inputs
+        // if less than three values are before index, cannot be a half
+        if (index < 3)
+        {
+            start_index = -1;
+            return null;
+        }
+
+        // inputs[index] (last input) must be WEST or EAST
+        // the first input must be the opposite
+        // otherwise, cannot be a half circle
+
+        bool is_forward_input;
+        Directionals end_direction = calc_directionals(inputs[index]);
+
+        if (end_direction == Directionals.EAST)
+        {
+            is_forward_input = true;
+        }
+        else if (end_direction == Directionals.WEST)
+        {
+            is_forward_input = false;
+        }
+        else
+        {
+            start_index = -1;
+            return null;
+        }
+
+        var (minus1_target, minus2_target, minus3_target, start_target) = get_targets(is_forward_input ? InputTypes.HCIRCLEFOR : InputTypes.HCIRCLEBACK);
+
+        Directionals minus1_direction = calc_directionals(inputs[index - 1]);
+        start_index = index - 2;
+
+        // any intermediate check for a half circle can be skipped
+        // however, only one can be skipped for the input to still be valid
+
+        // this check can be skipped
+        if (minus1_direction == minus1_target)
+        {
+            // skip to the input two inputs before inputs[index]
+            while (start_index >= 2 && calc_directionals(inputs[start_index]) == minus1_target)
+            {
+                start_index--;
+            }
+
+            // if the input two inputs before inputs[index] meets the target,
+            // skip to the input three inputs before inputs[index]
+
+            // this check can be skipped
+            if (calc_directionals(inputs[start_index]) == minus2_target)
+            {
+                do
+                {
+                    start_index--;
+                } while (start_index >= 1 && calc_directionals(inputs[start_index]) == minus2_target);
+
+                // if the input three inputs before inputs[index] meets the target,
+                // skip to the input four inputs before inputs[index]
+
+                // this check can be skipped
+                while (start_index >= 1 && calc_directionals(inputs[start_index]) == minus3_target)
+                {
+                    start_index--;
+                }
+
+                // if the input four (or three, if the previous check was skipped)
+                // inputs before inputs[index] meets the target,
+                // input is a half circle
+
+                // whether the previous check was skipped or not, the final input must be equal to start_target
+                if (calc_directionals(inputs[start_index]) == start_target && index - start_index < max_input_length)
+                {
+                    return is_forward_input;
+                }
+            }
+            else if (calc_directionals(inputs[start_index]) == minus3_target)
+            {
+                // minus2_target was skipped, so perform a strict check on remaining inputs
+
+                // skip to the input three inputs before inputs[index]
+                do
+                {
+                    start_index--;
+                } while (start_index >= 1 && calc_directionals(inputs[start_index]) == minus3_target);
+
+                // if the input three inputs before inputs[index] meets the target,
+                // input is a half circle
+                if (calc_directionals(inputs[start_index]) == start_target && index - start_index < max_input_length)
+                {
+                    return is_forward_input;
+                }
+            }
+        }
+        else if (minus1_direction == minus2_target)
+        {
+            // minus1_target was skipped, so perform a strict check on remaining inputs
+
+            // skip to the input two inputs before inputs[index]
+            while (start_index >= 2 && calc_directionals(inputs[start_index]) == minus2_target)
+            {
+                start_index--;
+            }
+
+            // if the input two inputs before inputs[index] meets the target,
+            // skip to the input three inputs before inputs[index]
+            if (calc_directionals(inputs[start_index]) == minus3_target)
+            {
+                do
+                {
+                    start_index--;
+                } while (start_index >= 1 && calc_directionals(inputs[start_index]) == minus3_target);
+
+                // if the input three inputs before inputs[index] meets the target,
+                // input is a half circle
+                if (calc_directionals(inputs[start_index]) == start_target && index - start_index < max_input_length)
+                {
+                    return is_forward_input;
+                }
+            }
+        }
+
+        // end of function reached
+        // no valid half circle input starting at index found in inputs
+        start_index = -1;
+        return null;
+    }
+
+    private bool? find_dp(List<Vector2> inputs, int index)
+    {
+        // if the first input is east or west, could still be a valid dp
+        // skip backwards over inputs until a new input is found
+        
+        // int start_index = index;
+
+        Directionals end_direction = calc_directionals(inputs[index]);
+        
+        /*
+        if (end_direction == Directionals.EAST || end_direction == Directionals.WEST)
+        {
+            // skip backwards to the next unique direction
+            // if index goes below its minimum requirement (2),
+            // break out of the loop
+            while (start_index >= 2 && calc_directionals(inputs[start_index]) == end_direction)
+            {
+                start_index--;
+            }
+
+            // update end_direction to the new index and skip all concurrent identical directions
+            end_direction = calc_directionals(inputs[start_index]);
+            while (start_index >= 2 && calc_directionals(inputs[start_index - 1]) == end_direction)
+            {
+                start_index--;
+            }
+        }
+        */
+        
+        // dp requries a minimum of 3 inputs
+        // if less than two values are before index, cannot be a dp
+        if (index < 2)
+        {
+            return null;
+        }
+
+        // inputs[index] (last input) must be SOUTHWEST or SOUTHEAST
+        // the first input must be WEST or EAST, respectively
+        // otherwise, cannot be a dp
+
+        bool is_forward_input;
+
+        if (end_direction == Directionals.SOUTHEAST)
+        {
+            is_forward_input = true;
+        }
+        else if (end_direction == Directionals.SOUTHWEST)
+        {
+            is_forward_input = false;
+        }
+        else
+        {
+            // cannot be a dp
+            return null;
+        }
+
+        var (minus1_target, minus2_target, start_target, _) = get_targets(is_forward_input ? InputTypes.DPFOR : InputTypes.DPBACK);
+
+        Directionals minus1_direction = calc_directionals(inputs[index - 1]);
+        int start_index = index - 2;
+
+        if (minus1_direction == minus1_target)
+        {
+            while (start_index >= 1 && calc_directionals(inputs[start_index]) == minus1_target)
+            {
+                start_index--;
+            }
+
+            // optional inbetween
+            while (start_index >= 1 && calc_directionals(inputs[start_index]) == minus2_target)
+            {
+                start_index--;
+            }
+
+            if (calc_directionals(inputs[start_index]) == start_target && index - start_index < max_input_length)
+            {
+                return is_forward_input;
+            }
+        }
+
+        // end of function reached
+        // no valid dp input starting at index found in inputs
+        return null;
+    }
+
+    private bool? find_dp(List<Vector2> inputs, int index, out int start_index)
+    {
+        // if the first input is east or west, could still be a valid dp
+        // skip backwards over inputs until a new input is found
+        int new_index = index;
+        Directionals end_direction = calc_directionals(inputs[new_index]);
+
+        if (end_direction == Directionals.EAST || end_direction == Directionals.WEST)
+        {
+            // if index goes below its minimum requirement (2),
+            // break out of the loop
+            while (new_index >= 2 && calc_directionals(inputs[new_index]) == end_direction)
+            {
+                new_index--;
+            }
+
+            // update end_direction to the new index
+            end_direction = calc_directionals(inputs[new_index]);
+        }
+
+        // dp requries a minimum of 3 inputs
+        // if less than two values are before index, cannot be a dp
+        if (new_index < 2)
+        {
+            start_index = -1;
+            return null;
+        }
+
+        // inputs[index] (last input) must be SOUTHWEST or SOUTHEAST
+        // the first input must be WEST or EAST, respectively
+        // otherwise, cannot be a dp
+
+        bool is_forward_input;
+
+        if (end_direction == Directionals.SOUTHEAST)
+        {
+            is_forward_input = true;
+        }
+        else if (end_direction == Directionals.SOUTHWEST)
+        {
+            is_forward_input = false;
+        }
+        else
+        {
+            // cannot be a dp
+            start_index = -1;
+            return null;
+        }
+
+        var (minus1_target, minus2_target, start_target, _) = get_targets(is_forward_input ? InputTypes.DPFOR : InputTypes.DPBACK);
+
+        Directionals minus1_direction = calc_directionals(inputs[new_index - 1]);
+        start_index = new_index - 2;
+
+        if (minus1_direction == minus1_target)
+        {
+            while (start_index >= 1 && calc_directionals(inputs[start_index]) == minus1_target)
+            {
+                start_index--;
+            }
+
+            // optional inbetween
+            while (start_index >= 1 && calc_directionals(inputs[start_index]) == minus2_target)
+            {
+                start_index--;
+            }
+
+            if (calc_directionals(inputs[start_index]) == start_target && index - start_index < max_input_length)
+            {
+                return is_forward_input;
+            }
+        }
+
+        // end of function reached
+        // no valid dp input starting at index found in inputs
+        start_index = -1;
+        return null;
+    }
+
+    // add comments to quarter circle functions
+    private bool? find_quarter_circle(List<Vector2> inputs, int index)
+    {
+        // quarter circle requries a minimum of 3 inputs
+        // if less than two values are before index, cannot be a quarter circle
+        if (index < 2)
+        {
+            return null;
+        }
+
+        // inputs[index] (last input) must be WEST or EAST
+        // the first input must be SOUTH
+        // otherwise, cannot be a quarter circle
+
+        bool is_forward_input;
+        Directionals end_direction = calc_directionals(inputs[index]);
+
+        if (end_direction == Directionals.EAST)
+        {
+            is_forward_input = true;
+        }
+        else if (end_direction == Directionals.WEST)
+        {
+            is_forward_input = false;
+        }
+        else
+        {
+            // cannot be a quarter circle
+            return null;
+        }
+
+        var (middle_target, start_target, _, _) = get_targets(is_forward_input ? InputTypes.QCIRCLEFOR : InputTypes.QCIRCLEBACK);
+
+        Directionals minus1_direction = calc_directionals(inputs[index - 1]);
+        int start_index = index - 2;
+
+        if (minus1_direction == middle_target)
+        {
+            while (start_index >= 1 && calc_directionals(inputs[start_index]) == middle_target)
+            {
+                start_index--;
+            }
+
+            if (calc_directionals(inputs[start_index]) == start_target && index - start_index < max_input_length)
+            {
+                return is_forward_input;
+            }
+        }
+
+        // end of function reached
+        // no valid quarter circle input starting at index found in inputs
+        return null;
+    }
+
+    private bool? find_quarter_circle(List<Vector2> inputs, int index, out int start_index)
+    {
+        // quarter circle requries a minimum of 3 inputs
+        // if less than two values are before index, cannot be a quarter circle
+        if (index < 2)
+        {
+            start_index = -1;
+            return null;
+        }
+
+        // inputs[index] (last input) must be WEST or EAST
+        // the first input must be SOUTH
+        // otherwise, cannot be a quarter circle
+
+        bool is_forward_input;
+        Directionals end_direction = calc_directionals(inputs[index]);
+
+        if (end_direction == Directionals.EAST)
+        {
+            is_forward_input = true;
+        }
+        else if (end_direction == Directionals.WEST)
+        {
+            is_forward_input = false;
+        }
+        else
+        {
+            // cannot be a quarter circle
+            start_index = -1;
+            return null;
+        }
+
+        var (middle_target, start_target, _, _) = get_targets(is_forward_input ? InputTypes.QCIRCLEFOR : InputTypes.QCIRCLEBACK);
+
+        Directionals minus1_direction = calc_directionals(inputs[index - 1]);
+        start_index = index - 2;
+
+        if (minus1_direction == middle_target)
+        {
+            while (start_index >= 1 && calc_directionals(inputs[start_index]) == middle_target)
+            {
+                start_index--;
+            }
+
+            if (calc_directionals(inputs[start_index]) == start_target && index - start_index < max_input_length)
+            {
+                return is_forward_input;
+            }
+        }
+
+        // end of function reached
+        // no valid quarter circle input starting at index found in inputs
+        start_index = -1;
+        return null;
+    }
+
     private InputTypes directional_input_test(List<Vector2> inputs, int index)
     {
-        bool forward; // is the input forwards or backwards?
-        bool guaranteed_dp; // is the input guaranteed to be a dp if these conditions are met?
-
-        // the requried directions for an given directional input
-        // minus4 is the earliest direction inputted, minus1 is the second to last direction (compared to curr_type)
-        Directionals minus1_target;
-        Directionals minus2_target;
-        Directionals minus3_target;
-        Directionals minus4_target;
-
-        // alternate options for targets 3 and 4 
-        Directionals alt3_inbetween = Directionals.NULL;
-        Directionals alt4_target = Directionals.NULL;
-
-        Directionals curr_type = calc_directionals(inputs[index]); // the end of the input, if it exists
-        
-        if (curr_type == Directionals.EAST) // could be QCF, HCF, DPF
+        bool? hcircle_present = find_half_circle(inputs, index);
+        if (hcircle_present != null)
         {
-            minus4_target = Directionals.WEST;
-            minus3_target = Directionals.SOUTHWEST;
-            minus2_target = Directionals.SOUTH;
-            minus1_target = Directionals.SOUTHEAST;
-
-            alt4_target = Directionals.EAST;
-            alt3_inbetween = Directionals.SOUTHEAST;
-
-            forward = true;
-            guaranteed_dp = false;
-        }
-        else if (curr_type == Directionals.WEST) // could be QCB, HCB, DPB
-        {
-            minus4_target = Directionals.EAST;
-            minus3_target = Directionals.SOUTHEAST;
-            minus2_target = Directionals.SOUTH;
-            minus1_target = Directionals.SOUTHWEST;
-
-            alt4_target = Directionals.WEST;
-            alt3_inbetween = Directionals.SOUTHWEST;
-
-            forward = false;
-            guaranteed_dp = false;
-        }
-        else if (curr_type == Directionals.SOUTHEAST) // could be DPF
-        {
-            minus4_target = Directionals.NULL;
-            minus3_target = Directionals.NULL;
-            minus2_target = Directionals.EAST;
-            minus1_target = Directionals.SOUTH;
-
-            forward = true;
-            guaranteed_dp = true;
-        }
-        else if (curr_type == Directionals.SOUTHWEST) // could be DPB
-        {
-            minus4_target = Directionals.NULL;
-            minus3_target = Directionals.NULL;
-            minus2_target = Directionals.WEST;
-            minus1_target = Directionals.SOUTH;
-
-            forward = false;
-            guaranteed_dp = true;
-        }
-        else // inputs[index] can't be the end of a directional input
-        {
-            return InputTypes.NONE;
+            return (hcircle_present.Value ? InputTypes.HCIRCLEFOR : InputTypes.HCIRCLEBACK);
         }
 
-        Directionals direction1 = calc_directionals(inputs[index - 1]);
-        if (direction1 == minus2_target)
+        bool? dp_present = find_dp(inputs, index);
+        if (dp_present != null)
         {
-            // only possible valid inputs are half circles
-            for (int i = index - 2; i >= 0; i--)
-            {
-                Directionals direction2 = calc_directionals(inputs[i]);
-
-                if (direction2 == minus4_target)
-                {
-                    return forward ? InputTypes.HCIRCLEFOR : InputTypes.HCIRCLEBACK;
-                }
-                else if (direction2 == minus3_target || direction2 == minus2_target)
-                {
-                    continue;
-                }
-
-                break;
-            }
-        }
-        else if (direction1 == minus1_target)
-        {
-            // possible valid inputs are quarter circles, half circles, and "dp"s
-            if (guaranteed_dp)
-            {
-                for (int i = index - 2; i >= 0; i--)
-                {
-                    Directionals direction2 = calc_directionals(inputs[i]);
-
-                    if (direction2 == minus2_target)
-                    {
-                        return forward ? InputTypes.DPFOR : InputTypes.DPBACK;
-                    }
-                    else if (direction2 == minus1_target || direction2 == curr_type)
-                    {
-                        continue;
-                    }
-
-                    break;
-                }
-            }
-
-            for (int i = index - 2; i >= 0; i--)
-            {
-                Directionals direction2 = calc_directionals(inputs[i]);
-
-                // if true, have not reached new direction yet
-                if (direction2 == minus1_target)
-                {
-                    continue;
-                }
-                // if true, reached unexpected new direction
-                // input[index] is not the end of a valid output
-                else if (direction2 != minus2_target)
-                {
-                    return InputTypes.NONE;
-                }
-
-                // input is at least a quarter circle, could still be a half circle or dp
-                // check for half circle
-                for (int j = i - 1; j >= 0; j--)
-                {
-                    Directionals direction3 = calc_directionals(inputs[j]);
-
-                    if (direction3 == minus4_target)
-                    {
-                        return forward ? InputTypes.HCIRCLEFOR : InputTypes.HCIRCLEBACK;
-                    }
-                    else if (direction3 == minus3_target || direction3 == minus2_target)
-                    {
-                        continue;
-                    }
-
-                    break;
-                }
-
-                // check for dp
-                for (int j = i - 1; j >= 0; j--)
-                {
-                    Directionals direction3 = calc_directionals(inputs[j]);
-
-                    if (direction3 == alt4_target)
-                    {
-                        return forward ? InputTypes.DPFOR : InputTypes.DPBACK;
-                    }
-                    else if (direction3 == alt3_inbetween || direction3 == minus2_target)
-                    {
-                        continue;
-                    }
-
-                    break;
-                }
-
-                // quarter circle has no valid inputs attached to it
-                return forward ? InputTypes.QCIRCLEFOR : InputTypes.QCIRCLEBACK;
-            }
+            return (dp_present.Value ? InputTypes.DPFOR : InputTypes.DPBACK);
         }
 
-        // end of function reached, no valid input ending at index found in inputs
-        return InputTypes.NONE;
-    }
-    
-    // reminder: clean up harsh_di_test's calculation of input
-    private InputTypes harsh_directional_input_test(List<Vector2> inputs, int index)
-    {
-        bool forward; // is the input forwards or backwards?
-        bool guaranteed_dp; // is the input guaranteed to be a dp if these conditions are met?
-
-        // the requried directions for an given directional input
-        // minus4 is the earliest direction inputted, minus1 is the second to last direction (compared to curr_type)
-        Directionals minus1_target;
-        Directionals minus2_target;
-        Directionals minus3_target;
-        Directionals minus4_target;
-
-        // alternate options for targets 3 and 4 
-        Directionals alt3_inbetween = Directionals.NULL;
-        Directionals alt4_target = Directionals.NULL;
-
-        Directionals curr_type = calc_directionals(inputs[index]); // the end of the input, if it exists
-        if (curr_type == Directionals.EAST) // could be QCF, HCF, DPF
+        bool? qcircle_present = find_quarter_circle(inputs, index);
+        if (qcircle_present != null)
         {
-            minus4_target = Directionals.WEST;
-            minus3_target = Directionals.SOUTHWEST;
-            minus2_target = Directionals.SOUTH;
-            minus1_target = Directionals.SOUTHEAST;
-
-            alt4_target = Directionals.EAST;
-            alt3_inbetween = Directionals.SOUTHEAST;
-
-            forward = true;
-            guaranteed_dp = false;
-        }
-        else if (curr_type == Directionals.WEST) // could be QCB, HCB, DPB
-        {
-            minus4_target = Directionals.EAST;
-            minus3_target = Directionals.SOUTHEAST;
-            minus2_target = Directionals.SOUTH;
-            minus1_target = Directionals.SOUTHWEST;
-
-            alt4_target = Directionals.WEST;
-            alt3_inbetween = Directionals.SOUTHWEST;
-
-            forward = false;
-            guaranteed_dp = false;
-        }
-        else if (curr_type == Directionals.SOUTHEAST) // could be DPF
-        {
-            minus4_target = Directionals.NULL;
-            minus3_target = Directionals.NULL;
-            minus2_target = Directionals.EAST;
-            minus1_target = Directionals.SOUTH;
-
-            forward = true;
-            guaranteed_dp = true;
-        }
-        else if (curr_type == Directionals.SOUTHWEST) // could be DPB
-        {
-            minus4_target = Directionals.NULL;
-            minus3_target = Directionals.NULL;
-            minus2_target = Directionals.WEST;
-            minus1_target = Directionals.SOUTH;
-
-            forward = false;
-            guaranteed_dp = true;
-        }
-        else // can't be a directional input
-        {
-            return InputTypes.NONE;
+            return (qcircle_present.Value ? InputTypes.QCIRCLEFOR : InputTypes.QCIRCLEBACK);
         }
 
-        if (calc_directionals(inputs[index - 1]) != minus1_target)
-        {
-            return InputTypes.NONE;
-        }
-
-        for (int j = index - 2; j >= 0; j--)
-        {
-            if (calc_directionals(inputs[j]) != minus2_target)
-            {
-                continue;
-            }
-
-            if (guaranteed_dp)
-            {
-                return forward ? InputTypes.DPFOR : InputTypes.DPBACK;
-            }
-
-            // a quarter circle has been inputted
-            // check if there are any inputs before inputs[j]
-            // if so, a half circle or dp may have been inputted
-            if (j >= 2)
-            {
-                for (int k = j - 1; k >= 1; k--)
-                {
-                    if (calc_directionals(inputs[k]) != minus3_target)
-                    {
-                        continue;
-                    }
-
-                    for (int l = k - 1; l >= 0; l--)
-                    {
-                        if (calc_directionals(inputs[l]) == minus4_target)
-                        {
-                            return forward ? InputTypes.HCIRCLEFOR : InputTypes.HCIRCLEBACK;
-                        }
-                    }
-                }
-            }
-
-            if (j >= 1)
-            {
-                for (int k = j - 1; k >= 0; k--)
-                {
-                    Directionals test = calc_directionals(inputs[k]);
-
-                    if (test == alt4_target)
-                    {
-                        return forward ? InputTypes.DPFOR : InputTypes.DPBACK;
-                    }
-                    else if (test != minus2_target && test != alt3_inbetween)
-                    {
-                        break;
-                    }
-                }
-            }
-
-            return forward ? InputTypes.QCIRCLEFOR : InputTypes.QCIRCLEBACK;
-        }
-        
         return InputTypes.NONE;
     }
 
-    private InputTypes check_inputs(List<Vector2> inputs, bool lenient)
+    // adjust for loop condition back to i >= 2 if necessary/when finished testing
+    private InputTypes check_inputs(List<Vector2> inputs)
     {
-        for (int i = inputs.Count - 1; i >= 1; i--)
+        int min_index = Math.Max(inputs.Count - buffer_frames, 0);
+
+        for (int i = inputs.Count - 1; i >= min_index; i--)
         {
-            InputTypes input = lenient ? directional_input_test(inputs, i) : harsh_directional_input_test(inputs, i);
+            InputTypes input = directional_input_test(inputs, i);
             if (input != InputTypes.NONE)
             {
                 return input;
@@ -396,6 +654,33 @@ public class DirectionalMovement : MonoBehaviour
         }
 
         return InputTypes.NONE;
+    }
+
+    /* function for testing the results of check_inputs */
+    private void test_check_inputs()
+    {
+        List<Vector2> test_inputs = new List<Vector2>()
+        {
+            VectorFunctions.make_vector(0),
+            VectorFunctions.make_vector(0),
+            VectorFunctions.make_vector(0),
+            VectorFunctions.make_vector(0),
+            VectorFunctions.make_vector(0),
+            VectorFunctions.make_vector(315),
+            VectorFunctions.make_vector(315),
+            VectorFunctions.make_vector(315),
+            VectorFunctions.make_vector(270),
+            VectorFunctions.make_vector(270),
+            VectorFunctions.make_vector(270),
+            VectorFunctions.make_vector(270),
+            VectorFunctions.make_vector(315),
+            VectorFunctions.make_vector(315),
+            VectorFunctions.make_vector(0),
+            VectorFunctions.make_vector(0),
+            VectorFunctions.make_vector(0)
+        };
+
+        print(check_inputs(test_inputs));
     }
 
     // Start is called before the first frame update
@@ -412,14 +697,37 @@ public class DirectionalMovement : MonoBehaviour
     // Update is called once per frame
     void FixedUpdate()
     {
-        user_inputs.Add(move_direction);
-        if (user_inputs.Count > buffer_frames)
-        {
-            user_inputs.RemoveAt(0);
-        }
+        //test_check_inputs();
 
-        // debug_vector2_list(user_inputs);
-        inputted_directional = check_inputs(user_inputs, true);
+        user_inputs.Add(move_direction);
+        // VectorFunctions.debug_vector2_list(user_inputs);
+
+        /*
+        Directionals test = calc_directionals(move_direction);
+        if (test != Directionals.NONE)
+        {
+            test_list.Add(test);
+        }
+        */
+
+        inputted_directional = check_inputs(user_inputs);
         print(inputted_directional);
+
+        /*
+        if (inputted_directional != InputTypes.NONE)
+        {
+            print(inputted_directional);
+
+            string test_string = "";
+            foreach (var item in test_list)
+            {
+                test_string += item.ToString() + " ";
+            }
+
+            print(test_string);
+
+            test_list.Clear();
+        }
+        */
     }
 }
