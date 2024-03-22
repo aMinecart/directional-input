@@ -1,11 +1,12 @@
-using System;
 using System.Collections.Generic;
 using UnityEngine;
 
+// note: for some reason, dp inputs linger one or two extra frames
+// when forward (for DPFOR) or backward (for DPBACK) is held after the input
 public class DirectionalMovementV2 : MonoBehaviour
 {
-    // private static readonly int buffer_frames = 13;
-    private static readonly int max_input_length = 25; // idea for default is 10
+    private static readonly int buffer_frames = 13;
+    private static readonly int max_input_length = 10; // idea for default is 10
 
     [SerializeField] private InputReader input_reader;
 
@@ -89,7 +90,7 @@ public class DirectionalMovementV2 : MonoBehaviour
     // add comments to find_* functions
     private bool? find_quarter_circle(List<TimedDirection> inputs, int index)
     {
-        // quarter circle requries a minimum of 3 inputs
+        // quarter circle requires a minimum of 3 inputs
         // if less than two values are before index, cannot be a quarter circle
         if (index < 2)
         {
@@ -133,14 +134,14 @@ public class DirectionalMovementV2 : MonoBehaviour
         }
 
         // end of function reached
-        // no valid quarter circle input starting at index found in inputs
+        // no valid quarter circle input ending at index found in inputs
         return null;
     }
 
     private bool? find_dp(List<TimedDirection> inputs, int index)
     {
-        // dp requries a minimum of 3 inputs
-        // if less than two values are before index, cannot be a quarter circle
+        // dp requires a minimum of 3 inputs
+        // if less than two values are before index, cannot be a dp
         if (index < 2)
         {
             return null;
@@ -200,11 +201,90 @@ public class DirectionalMovementV2 : MonoBehaviour
         }
 
         // end of function reached
-        // no valid dp input starting at index found in inputs
+        // no valid dp input ending at index found in inputs
         return null;
     }
 
-    /*private Inputs directional_input_test(List<Vector2> inputs, int index)
+    private bool? find_half_circle(List<TimedDirection> inputs, int index)
+    {
+        // half circle requires a minimum of 4 inputs
+        // if less than three values are before index, cannot be a half circle
+        if (index < 3)
+        {
+            return null;
+        }
+
+        // inputs[index] (last direction) must be WEST or EAST
+        // the first direction must be the opposite
+        // otherwise, cannot be a half circle
+
+        bool is_forward_input;
+        Directions end_direction = inputs[index].direction;
+
+        if (end_direction == Directions.EAST)
+        {
+            is_forward_input = true;
+        }
+        else if (end_direction == Directions.WEST)
+        {
+            is_forward_input = false;
+        }
+        else
+        {
+            // cannot be a half circle
+            return null;
+        }
+
+        var (start_target, middle_target_3, middle_target_2, middle_target_1, _) = get_targets(is_forward_input ? Inputs.HCIRCLEFOR : Inputs.HCIRCLEBACK);
+        int input_length = 2;
+
+        TimedDirection minus1_timed_direction = inputs[index - 1];
+        TimedDirection minus2_timed_direction = inputs[index - 2];
+        TimedDirection minus3_timed_direction = inputs[index - 3];
+        Directions minus4_direction = (index >= 4 ? inputs[index - 4].direction : Directions.NULL);
+
+        input_length += minus1_timed_direction.frames_active;
+        input_length += minus2_timed_direction.frames_active;
+
+        if (minus1_timed_direction.direction == middle_target_1 &&
+            minus2_timed_direction.direction == middle_target_2 &&
+            minus3_timed_direction.direction == middle_target_3 &&
+            minus4_direction == start_target)
+        {
+            input_length += minus3_timed_direction.frames_active;
+            if (input_length <= max_input_length)
+            {
+                return is_forward_input;
+            }
+        }
+        else if (minus1_timed_direction.direction == middle_target_1 &&
+                minus2_timed_direction.direction == middle_target_2 &&
+                minus3_timed_direction.direction == start_target &&
+                input_length <= max_input_length)
+        {
+            return is_forward_input;
+        }
+        else if (minus1_timed_direction.direction == middle_target_1 &&
+                minus2_timed_direction.direction == middle_target_3 &&
+                minus3_timed_direction.direction == start_target &&
+                input_length <= max_input_length)
+        {
+            return is_forward_input;
+        }
+        else if (minus1_timed_direction.direction == middle_target_2 &&
+                minus2_timed_direction.direction == middle_target_3 &&
+                minus3_timed_direction.direction == start_target &&
+                input_length <= max_input_length)
+        {
+            return is_forward_input;
+        }
+
+        // end of function reached
+        // no valid half circle input ending at index found in inputs
+        return null;
+    }
+
+    private Inputs find_directional_input(List<TimedDirection> inputs, int index)
     {
         bool? hcircle_present = find_half_circle(inputs, index);
         if (hcircle_present.HasValue)
@@ -225,16 +305,20 @@ public class DirectionalMovementV2 : MonoBehaviour
         }
 
         return Inputs.NONE;
-    }*/
+    }
 
-    // refactor to use frames_active property of list elements
-    /*private Inputs check_inputs(List<Vector2> inputs)
+    private Inputs check_inputs(List<TimedDirection> inputs)
     {
-        int min_index = Math.Max(inputs.Count - buffer_frames, 0);
-
-        for (int i = inputs.Count - 1; i >= min_index; i--)
+        int time_since_input = 0;
+        for (int i = inputs.Count - 1; i >= 0; i--)
         {
-            Inputs input = directional_input_test(inputs, i);
+            time_since_input += inputs[i].frames_active;
+            if (time_since_input > buffer_frames)
+            {
+                break;
+            }
+
+            Inputs input = find_directional_input(inputs, i);
             if (input != Inputs.NONE)
             {
                 return input;
@@ -242,7 +326,47 @@ public class DirectionalMovementV2 : MonoBehaviour
         }
 
         return Inputs.NONE;
-    }*/
+    }
+
+    private void test_find_di()
+    {
+        print(
+            find_directional_input(
+                new List<TimedDirection>() {
+                    new TimedDirection(Directions.SOUTH, 1),
+                    new TimedDirection(Directions.SOUTHEAST, 23),
+                    new TimedDirection(Directions.EAST, 1)
+                },
+                2
+            )
+        );
+
+        print(
+            find_directional_input(
+                new List<TimedDirection>() {
+                    new TimedDirection(Directions.EAST, 1),
+                    new TimedDirection(Directions.SOUTHEAST, 7),
+                    new TimedDirection(Directions.SOUTH, 9),
+                    new TimedDirection(Directions.SOUTHEAST, 7),
+                    new TimedDirection(Directions.EAST, 1),
+                },
+                4
+            )
+        );
+
+        print(
+            find_directional_input(
+                new List<TimedDirection>() {
+                    new TimedDirection(Directions.WEST, 1),
+                    new TimedDirection(Directions.SOUTHWEST, 9),
+                    new TimedDirection(Directions.SOUTH, 5),
+                    new TimedDirection(Directions.SOUTHEAST, 9),
+                    new TimedDirection(Directions.EAST, 1)
+                },
+                4
+            )
+        );
+    }
 
     // Start is called before the first frame update
     void Start()
@@ -269,33 +393,8 @@ public class DirectionalMovementV2 : MonoBehaviour
             inputted_directions.Add(new TimedDirection(move_direction));
         }
 
-        /*
-        print(
-            find_quarter_circle(
-                new List<TimedDirection>() {
-                    new TimedDirection(Directions.SOUTH, 1),
-                    new TimedDirection(Directions.SOUTHEAST, 23),
-                    new TimedDirection(Directions.EAST, 1)
-                },
-                2
-            )
-        );
-        */
-        
-        /*
-        print(
-            find_dp(
-                new List<TimedDirection>() {
-                    new TimedDirection(Directions.EAST, 1),
-                    new TimedDirection(Directions.SOUTHEAST, 7),
-                    new TimedDirection(Directions.SOUTH, 9),
-                    new TimedDirection(Directions.SOUTHEAST, 7),
-                    new TimedDirection(Directions.EAST, 1),
-                },
-                4
-            )
-        );
-        */
+        current_input = check_inputs(inputted_directions);
+        print(current_input);
     }
 
     private class TimedDirection
